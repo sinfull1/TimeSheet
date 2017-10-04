@@ -3,32 +3,49 @@ from tkinter import font
 import os
 import socket
 import pandas as pd
+import numpy as np
 import pandas.io.formats.excel
 import xlsxwriter
 from pprint import pprint as pp
-
+from git import Repo
+from datetime import datetime as dtime
 
 
 class manageData:  
     
     empDataBase = 'employeeList.csv'
-    salarayDatabase = 'salaryDatabse.csv'
+    salarayDatabase = 'salaryDatabase.csv'
     empListSheet = 'EmployeesList'
-    templateInXl = 'Template'
+    monthlyDataSheet = 'MonthlyData'
     excelForDisp = 'displayData.xlsx'
+    gitHubLoc = 'git@github.com:tiger-syntex/TimeSheet.git'
+    repotCheckout = 'H:\Repos\MohitYadavGitHub\TimeSheetV2\TimeSheet'
+
+  
+    def __init__(self,mainWinwdow):   
     
-      
-    def __init__(self,mainWinwdow):
-          
-        ##  read the databases in the background when you create the class             
-        self.empList = self.empListRead()
-        
-        ## check for Internet
+        ## check for Internet        
         self.checkInternet = self.is_conencted()
-         
         
-        ## create the GUI
-       
+        ## if internet present , pull the latest version from net
+#         if self.checkInternet:
+#             self.gitPull()          
+         
+        ## define the colIndex for your databse        
+        self.colIndex = self.flattenMixList (['MonthlySalary',
+                                             [str(x) for x in list(range(1,32))], 
+                                             'Total_Days_Worked',                                        
+                                             'Advance_Balance',
+                                             'Advance_For_Month',
+                                             'Salary_For_Month'])     
+        
+        ##  read the databases in the background when you create the class      
+        self.currMonth = (pd.Period(dtime.now(), 'M')).strftime('%B %Y')       
+        self.empList = self.empListRead() 
+        
+        #=======================================================================
+        # ## create the GUI
+        #=======================================================================
         ## Frames              
         frame = Frame(mainWinwdow,width = 400,height = 100)
         frame.pack()
@@ -70,33 +87,152 @@ class manageData:
             pass
         return False
     
-    
+    #===========================================================================
+    # Pull the latest content from Server
+    #===========================================================================
+    def gitPull(self):
+        repo = Repo(self.repotCheckout)
+        repo.delete_remote('origin')
+        origin = repo.create_remote('origin', self.gitHubLoc)
+        origin.fetch()
+        origin.pull(origin.refs[0].remote_head)
+
+        
     #===========================================================================
     # Read the empDataBase
     #===========================================================================
     def empListRead(self):
         with open(self.empDataBase,'r') as ff:
-            newDf = pd.read_csv(ff)
- #             pp (dir(newDf.index))
-            return (newDf)
-    
-         
+            empDf = pd.read_csv(ff)      
+        return (empDf)
+     
+     
+     #==========================================================================
+     # Read the Salary Databse
+     #==========================================================================
+    def salDataBaseRead (self):
+        with open(self.salarayDatabase,'r') as ff:
+            salaryDF = pd.DataFrame.from_csv(ff,parse_dates =False, index_col=[0,1])
+#             salaryDF = pd.DataFrame.from_csv(ff, index_col=[0,1])
+        return (salaryDF)     
+             
+             
     #===========================================================================
     # openXlsForUpdate : open the excel file to feed monthly data
     #===========================================================================
     def openXlsForUpdate(self):
-        print ('open excel here')
+        salaryDF = self.salDataBaseRead()             
+        lastMonth = (pd.Period(dtime.now(), 'M') - 1).strftime('%B %Y') 
+        listOfEmps = self.empList.EmployeeName.values
+        
+        newWayForIndex = pd.MultiIndex.from_product([listOfEmps,[self.currMonth,lastMonth]],names=['EmployeeName','Month'])
+        
+        # check if current month entry exists
+        for (idx, row) in self.empList.iterrows():
+            emps = row.loc['EmployeeName']
+            sal = row.loc['Salary']        
+            tupForMonth = (emps,self.currMonth)             
+            if not(tupForMonth in salaryDF.index.tolist()):    
+                # check if previous month entry exist
+                tupForPrevMonth =  (emps,lastMonth)
+                if tupForPrevMonth in  salaryDF.index.tolist():
+                    # create dummy current month entry
+                    salaryDF = self.addDummyEntryForDataFrame(salaryDF,emps,sal,self.currMonth)                    
+                    print(emps,sal)
+                else:
+                    # create dummy this month and previous month entry                     
+                    print(emps,sal)     
+                    salaryDF = self.addDummyEntryForDataFrame(salaryDF,emps,sal,[lastMonth,self.currMonth])
+                self.writeToSalDatabse(salaryDF)  
+                      
+        # Filter current month for displaying in excel, and for list of emps              
+        extractDf = salaryDF.xs(self.currMonth,level=1)
+        extractDf = extractDf.filter(listOfEmps,axis=0)
+#         sorted(list())
+
+        # Math Operations before displaying
+        
+        # write content to excel       
+        xlsWr = pd.ExcelWriter(self.excelForDisp) 
+        extractDf.to_excel(xlsWr,self.currMonth)
+        xlsWr.save()   
+        os.startfile(self.excelForDisp)
+        
 #         excelFile = 'template.xlsx'
 #         os.startfile(excelFile)
+    
+    
+    #===========================================================================
+    # addDummyEntryForDataFrame :  create a dummy entry for dataframe
+    #===========================================================================
+    def addDummyEntryForDataFrame(self,baseFrame,empName,salary,monthsInput):
+        
+        if type(monthsInput) == list:
+            newWayForIndex = pd.MultiIndex.from_product([[empName],monthsInput],names=['EmployeeName','Month'])
+            dataEntry = self.flattenMixList([salary,np.zeros(len(self.colIndex)-1)])
+            dataEntry = [np.array(dataEntry),np.array(dataEntry)]
+            ndf = pd.DataFrame(dataEntry,index=newWayForIndex ,columns=self.colIndex)
+            baseFrame = pd.concat([baseFrame,ndf], join='inner',).sort_index()
+        else:
+            newWayForIndex = pd.MultiIndex.from_product([[empName],[monthsInput]],names=['EmployeeName','Month'])
+            dataEntry = [salary,np.zeros(len(colIndex)-1)]
+            ndf = pd.DataFrame(dataEntry,index=self.colIndex ,columns=newWayForIndex)
+            ndf = ndf.T        
+            baseFrame = pd.concat([baseFrame,ndf], join='inner',).sort_index()        
 
+        return baseFrame
+        
+        
 
     #===========================================================================
     # updateDatabse : update the employee salary database for data in excel
     #===========================================================================
     def updateDatabse(self):
-        print('ok')
+               
+        ## part 1 : update the employee list, based on excel
+        xlFileToRead = pd.ExcelFile(self.excelForDisp)
+        if xlFileToRead.sheet_names[0] == self.empListSheet:
+            
+            # update the employee list and Salary
+            empList = pd.read_excel(self.excelForDisp,self.empListSheet)
+            empList.to_csv(self.empDataBase,index = False)
+            # you just wrote to the database, read it again
+            self.empList = self.empListRead() 
+            
+        elif xlFileToRead.sheet_names[0] == self.currMonth:
+            
+            # read the salary database and try to drop the current month info if 
+            # present,since it will be updated in the next steps
+            salaryDF = self.salDataBaseRead() 
+            salaryDF.drop(self.currMonth,level = 'Month',inplace=True)
+            
+            # read the current month data from excel and format it to be added
+            salDataFromExcelForMonth = pd.read_excel(self.excelForDisp,self.currMonth,index_col=[0])
+            rowMultiIndices = pd.MultiIndex.from_product([salDataFromExcelForMonth.index.values,[self.currMonth]],names=['EmployeeName','Month'])
+            newDFtoadd = pd.DataFrame (salDataFromExcelForMonth.values,index=rowMultiIndices,columns=self.colIndex)
+            
+            # add current month data to base dataFrame
+            salaryDF =  pd.concat([salaryDF,newDFtoadd], join='inner',).sort_index()   
+            
+            # write as csv to database            
+            self.writeToSalDatabse(salaryDF)  
+
+        else:
+            print('error, xls doesnt have the data')    
+
         
-                
+        
+        
+    #===========================================================================
+    # writeToSalDatabse : write to Salary Database
+    #===========================================================================
+    def writeToSalDatabse(self,dataFrameToWrite):
+        # write as csv to database            
+        toCsv = dataFrameToWrite.to_csv()
+        with open(self.salarayDatabase,'w') as ff:
+            ff.write(toCsv)    
+            
+            
 
     #===========================================================================
     # addEmployee : add an employee to the employee database
@@ -104,7 +240,8 @@ class manageData:
     # the excel with employee list after its closed and update is clicked 
     #===========================================================================
     def changeEmpList(self):
-        print('ok')
+        
+        self.empList = self.empListRead()
         # reset the header style of pandas
         pandas.io.formats.excel.header_style = None
         
@@ -115,7 +252,7 @@ class manageData:
         # format the sheet
         wb = xlsWr.book
         ws = xlsWr.sheets[self.empListSheet]
-        format = wb.add_format({'bold': True, 'font_color': 'white', 'align':'center','font_size':'14','bg_color':'blue'})
+        format = wb.add_format({'bold': True, 'font_color': 'white', 'align':'center','font_size':'12','bg_color':'blue'})
         ws.set_row(0,20,format)        
         ws.set_column('A:A',25)
         
@@ -126,9 +263,23 @@ class manageData:
         os.startfile(self.excelForDisp)
     #===========================================================================
          
-        
+     
+     
+    ## Helpers ##
+    #=======================================================================
+    # 
+    #=======================================================================    
+    def flattenMixList(self,inputList):
+     final = []
+     for i in inputList:
+         if type(i) == list or type(i)== np.ndarray:
+             for j in i:
+                 final.append(j)
+         else:
+             final.append(i)
+     return(final)        
+
               
 mainWinwdow = Tk()
 classObj = manageData(mainWinwdow)
-print(classObj.empList)
 mainWinwdow.mainloop()
