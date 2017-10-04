@@ -92,18 +92,20 @@ class manageData:
     #===========================================================================
     def gitPull(self):
         repo = Repo(self.repotCheckout)
-        origin = repo.remote(name='origin')
+#         repo.delete_remote('origin')
+        origin = repo.create_remote('origin', self.gitHubLoc)    
         origin.fetch()
         origin.pull(origin.refs[0].remote_head)
 
     #===========================================================================
     # Pull the latest content from Server
     #===========================================================================
-    def gitPush(self):
-        repo = Repo(self.repotCheckout)
-        
-        origin = repo.remote(name='origin')
-        
+    def gitCommitAndPush(self):
+        repoLocal = Repo(self.repotCheckout)
+        if repoLocal.is_dirty():
+            repoLocal.git.add('--all')
+            repoLocal.git.commit('-m','Database Updated')            
+        origin = repoLocal.remote(name='origin')  
         origin.push(origin.refs[0].remote_head)
     
     
@@ -230,7 +232,7 @@ class manageData:
         else:
             print('error, xls doesnt have the data')    
 
-        
+        self.gitCommitAndPush()
         
         
     #===========================================================================
