@@ -7,7 +7,7 @@ import numpy as np
 import pandas.io.formats.excel
 import xlsxwriter
 from pprint import pprint as pp
-from git import Repo
+from git import Repo,remote
 from datetime import datetime as dtime
 
 
@@ -28,10 +28,10 @@ class manageData:
         self.checkInternet = self.is_conencted()
         
         ## if internet present , pull the latest version from net
-#         if self.checkInternet:
-#             self.gitPull()          
+        if self.checkInternet:
+            self.gitPull()          
          
-        ## define the colIndex for your databse        
+        ## define the colIndex for your database        
         self.colIndex = self.flattenMixList (['MonthlySalary',
                                              [str(x) for x in list(range(1,32))], 
                                              'Total_Days_Worked',                                        
@@ -92,11 +92,21 @@ class manageData:
     #===========================================================================
     def gitPull(self):
         repo = Repo(self.repotCheckout)
-        repo.delete_remote('origin')
-        origin = repo.create_remote('origin', self.gitHubLoc)
+        origin = repo.remote(name='origin')
         origin.fetch()
         origin.pull(origin.refs[0].remote_head)
 
+    #===========================================================================
+    # Pull the latest content from Server
+    #===========================================================================
+    def gitPush(self):
+        repo = Repo(self.repotCheckout)
+        
+        origin = repo.remote(name='origin')
+        
+        origin.push(origin.refs[0].remote_head)
+    
+    
         
     #===========================================================================
     # Read the empDataBase
