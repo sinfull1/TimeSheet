@@ -168,9 +168,19 @@ class manageData:
         # write content to excel       
         xlsWr = pd.ExcelWriter(self.excelForDisp) 
         extractDf.to_excel(xlsWr,self.currMonth)
+
+        
+        # format Excel Sheet for view
+        # reset the header style of pandas
+        pandas.io.formats.excel.header_style = None
+        wb = xlsWr.book
+        ws = xlsWr.sheets[self.currMonth]
+        format = wb.add_format({'bold': True, 'font_color': 'white', 'align':'center','font_size':'12','bg_color':'blue'})
+        ws.set_row(0,20,format)
+        
+        
         xlsWr.save()   
         os.startfile(self.excelForDisp)
-        
 #         excelFile = 'template.xlsx'
 #         os.startfile(excelFile)
     
@@ -229,11 +239,12 @@ class manageData:
             
             # write as csv to database            
             self.writeToSalDatabse(salaryDF)  
-
         else:
-            print('error, xls doesnt have the data')    
-
-        self.gitCommitAndPush()
+            print('error, xls doesnt have the data')
+               
+        # check for internet, and push for changes in database      
+        if self.checkInternet:
+            self.gitCommitAndPush() 
         
         
     #===========================================================================
