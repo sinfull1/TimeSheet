@@ -93,7 +93,8 @@ class manageData:
     def gitPull(self):
         repo = Repo(self.repotCheckout)
 #         repo.delete_remote('origin')
-        origin = repo.create_remote('origin', self.gitHubLoc)    
+#         origin = repo.create_remote('origin', self.gitHubLoc)
+        origin = repo.remote(name='origin')
         origin.fetch()
         origin.pull(origin.refs[0].remote_head)
 
