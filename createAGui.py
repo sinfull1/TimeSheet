@@ -20,13 +20,14 @@ class manageData:
     excelForDisp = 'displayData.xlsx'
     gitHubLoc = 'git@github.com:tiger-syntex/TimeSheet.git'
     repotCheckout = 'H:\Repos\MohitYadavGitHub\TimeSheetV2\TimeSheet'
+    noOfWorkingDays = 28
 
   
     def __init__(self,mainWinwdow):   
     
         ## check for Internet        
         self.checkInternet = self.is_conencted()
-        
+#         self.checkInternet = False
         ## if internet present , pull the latest version from net
         if self.checkInternet:
             self.gitPull()          
@@ -34,10 +35,10 @@ class manageData:
         ## define the colIndex for your database        
         self.colIndex = self.flattenMixList (['MonthlySalary',
                                              [str(x) for x in list(range(1,32))], 
-                                             'Total_Days_Worked',                                        
+                                             'Days_Worked',                                        
                                              'Advance_Balance',
-                                             'Advance_For_Month',
-                                             'Salary_For_Month'])     
+                                             'Salary_For_Month',
+                                             'Paid_In_Month'])     
         
         ##  read the databases in the background when you create the class      
         self.currMonth = (pd.Period(dtime.now(), 'M')).strftime('%B %Y')       
@@ -165,21 +166,50 @@ class manageData:
 
         # Math Operations before displaying
         
-        # write content to excel       
+        # write content to excel 
+        # reset the header style of pandas
+        pandas.io.formats.excel.header_style = None      
         xlsWr = pd.ExcelWriter(self.excelForDisp) 
         extractDf.to_excel(xlsWr,self.currMonth)
 
         
-        # format Excel Sheet for view
+        #=======================================================================
+        # # format Excel Sheet for view
+        #=======================================================================
         # reset the header style of pandas
         pandas.io.formats.excel.header_style = None
         wb = xlsWr.book
         ws = xlsWr.sheets[self.currMonth]
-        format = wb.add_format({'bold': True, 'font_color': 'white', 'align':'center','font_size':'12','bg_color':'blue'})
-        ws.set_row(0,20,format)
         
+        rowFormat = wb.add_format({'bold': True, 'font_color': 'white', 'align':'center','font_size':'12','bg_color':'blue','locked': True})
+        lockColFomat = wb.add_format({'bold': True,'locked': True})               
+        unlocked = wb.add_format({'locked': False})
+        locked   = wb.add_format({'locked': True})
+        
+        ws.set_column('A:XDF', None, locked)
+        ws.set_column(0, 0, 20,lockColFomat) 
+        ws.set_column(1, 1, 15,lockColFomat)  
+        ws.set_column('AH:AJ', 18,lockColFomat) 
+        ws.set_column('AK:AK', 15,unlocked)           
+        ws.set_column(2,32,3,unlocked)
+        ws.set_row(0,20,rowFormat) 
+        
+        noOfEmployeesDisplayed = len(extractDf.index.values)        
+        ws.data_validation('C2:AG'+str(noOfEmployeesDisplayed+1),{'validate': 'list',
+                                                                'source': ['0', '1']})
+        
+        for index in range(noOfEmployeesDisplayed+1,200):       
+            ws.set_row(index,8,locked)       
+        
+        for index in range(2,noOfEmployeesDisplayed+2):      
+            ws.write_formula('AH'+str(index), '=SUM($C'+str(index)+':$AG'+str(index)+')')
+            ws.write_formula('AJ'+str(index), '=B'+str(index)+'*(SUM($C'+str(index)+':$AG'+str(index)+'))/28')
+                                     
+        ws.protect()
+#         ws.set_row(0,0,locked)
         
         xlsWr.save()   
+        
         os.startfile(self.excelForDisp)
 #         excelFile = 'template.xlsx'
 #         os.startfile(excelFile)
