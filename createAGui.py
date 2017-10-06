@@ -28,7 +28,7 @@ class manageData:
     
         ## check for Internet        
         self.checkInternet = self.is_conencted()
-        self.checkInternet = False
+#         self.checkInternet = False
         ## if internet present , pull the latest version from net
         if self.checkInternet:
             self.gitPull()          
@@ -137,7 +137,10 @@ class manageData:
     # openXlsForUpdate : open the excel file to feed monthly data
     #===========================================================================
     def openXlsForUpdate(self):
-        salaryDF = self.salDataBaseRead()             
+        currMonth = self.currMonth
+        lastMonth = self.lastMonth
+        
+        salaryDF = self.salDataBaseRead()            
         
         listOfEmps = self.empList.EmployeeName.values
         
@@ -147,10 +150,11 @@ class manageData:
         for (idx, row) in self.empList.iterrows():
             emps = row.loc['EmployeeName']
             sal = row.loc['Salary']        
-            tupForMonth = (emps,self.currMonth)             
+            tupForMonth = (emps,self.currMonth) 
+            tupForPrevMonth =  (emps,self.lastMonth)            
             if not(tupForMonth in salaryDF.index.tolist()):    
                 # check if previous month entry exist
-                tupForPrevMonth =  (emps,self.lastMonth)
+                
                 if tupForPrevMonth in  salaryDF.index.tolist():
                     # create dummy current month entry
                     salaryDF = self.addDummyEntryForDataFrame(salaryDF,emps,sal,self.currMonth)                    
@@ -160,7 +164,11 @@ class manageData:
                     print(emps,sal)     
                     salaryDF = self.addDummyEntryForDataFrame(salaryDF,emps,sal,[self.lastMonth,self.currMonth])
                 self.writeToSalDatabse(salaryDF)  
-                      
+            elif not(tupForPrevMonth in salaryDF.index.tolist()):
+                salaryDF = self.addDummyEntryForDataFrame(salaryDF,emps,sal,self.lastMonth)  
+                
+                
+                            
         # Filter current month for displaying in excel, and for list of emps              
         extractDf = salaryDF.xs(self.currMonth,level=1)
         exDf_lastMonth = salaryDF.xs(self.lastMonth,level=1)
@@ -210,7 +218,7 @@ class manageData:
         
         for index in range(2,noOfEmployeesDisplayed+2):      
             ws.write_formula('AH'+str(index), '=SUM($C'+str(index)+':$AG'+str(index)+')')
-            ws.write_formula('AJ'+str(index), '=B'+str(index)+'*(SUM($C'+str(index)+':$AG'+str(index)+'))/28')
+            ws.write_formula('AJ'+str(index), '=CEILING(B'+str(index)+'*(SUM($C'+str(index)+':$AG'+str(index)+'))/28,10)')
                                      
         ws.protect()
 #         ws.set_row(0,0,locked)
@@ -235,7 +243,7 @@ class manageData:
             baseFrame = pd.concat([baseFrame,ndf], join='inner',).sort_index()
         else:
             newWayForIndex = pd.MultiIndex.from_product([[empName],[monthsInput]],names=['EmployeeName','Month'])
-            dataEntry = [salary,np.zeros(len(colIndex)-1)]
+            dataEntry = self.flattenMixList([salary,np.zeros(len(self.colIndex)-1)])
             ndf = pd.DataFrame(dataEntry,index=self.colIndex ,columns=newWayForIndex)
             ndf = ndf.T        
             baseFrame = pd.concat([baseFrame,ndf], join='inner',).sort_index()        
