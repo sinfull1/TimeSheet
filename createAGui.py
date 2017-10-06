@@ -9,6 +9,7 @@ import xlsxwriter
 from pprint import pprint as pp
 from git import Repo,remote
 from datetime import datetime as dtime
+import math
 
 
 class manageData:  
@@ -27,7 +28,7 @@ class manageData:
     
         ## check for Internet        
         self.checkInternet = self.is_conencted()
-#         self.checkInternet = False
+        self.checkInternet = False
         ## if internet present , pull the latest version from net
         if self.checkInternet:
             self.gitPull()          
@@ -41,7 +42,8 @@ class manageData:
                                              'Paid_In_Month'])     
         
         ##  read the databases in the background when you create the class      
-        self.currMonth = (pd.Period(dtime.now(), 'M')).strftime('%B %Y')       
+        self.currMonth = (pd.Period(dtime.now(), 'M')).strftime('%B %Y') 
+        self.lastMonth = (pd.Period(dtime.now(), 'M') - 1).strftime('%B %Y')       
         self.empList = self.empListRead() 
         
         #=======================================================================
@@ -136,10 +138,10 @@ class manageData:
     #===========================================================================
     def openXlsForUpdate(self):
         salaryDF = self.salDataBaseRead()             
-        lastMonth = (pd.Period(dtime.now(), 'M') - 1).strftime('%B %Y') 
+        
         listOfEmps = self.empList.EmployeeName.values
         
-        newWayForIndex = pd.MultiIndex.from_product([listOfEmps,[self.currMonth,lastMonth]],names=['EmployeeName','Month'])
+        newWayForIndex = pd.MultiIndex.from_product([listOfEmps,[self.currMonth,self.lastMonth]],names=['EmployeeName','Month'])
         
         # check if current month entry exists
         for (idx, row) in self.empList.iterrows():
@@ -148,7 +150,7 @@ class manageData:
             tupForMonth = (emps,self.currMonth)             
             if not(tupForMonth in salaryDF.index.tolist()):    
                 # check if previous month entry exist
-                tupForPrevMonth =  (emps,lastMonth)
+                tupForPrevMonth =  (emps,self.lastMonth)
                 if tupForPrevMonth in  salaryDF.index.tolist():
                     # create dummy current month entry
                     salaryDF = self.addDummyEntryForDataFrame(salaryDF,emps,sal,self.currMonth)                    
@@ -156,12 +158,17 @@ class manageData:
                 else:
                     # create dummy this month and previous month entry                     
                     print(emps,sal)     
-                    salaryDF = self.addDummyEntryForDataFrame(salaryDF,emps,sal,[lastMonth,self.currMonth])
+                    salaryDF = self.addDummyEntryForDataFrame(salaryDF,emps,sal,[self.lastMonth,self.currMonth])
                 self.writeToSalDatabse(salaryDF)  
                       
         # Filter current month for displaying in excel, and for list of emps              
         extractDf = salaryDF.xs(self.currMonth,level=1)
+        exDf_lastMonth = salaryDF.xs(self.lastMonth,level=1)
         extractDf = extractDf.filter(listOfEmps,axis=0)
+        exDf_lastMonth = exDf_lastMonth.filter(listOfEmps,axis=0)
+        
+        newBalForMonth = exDf_lastMonth['Advance_Balance']+exDf_lastMonth['Paid_In_Month']-exDf_lastMonth['Salary_For_Month']
+        extractDf['Advance_Balance'] = np.ceil(newBalForMonth / 10.0) * 10
 #         sorted(list())
 
         # Math Operations before displaying
