@@ -28,7 +28,7 @@ class manageData:
     
         ## check for Internet        
         self.checkInternet = self.is_conencted()
-#         self.checkInternet = False
+#         self.checkInternet = False 
         ## if internet present , pull the latest version from net
         if self.checkInternet:
             self.gitPull()          
