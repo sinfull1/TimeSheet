@@ -75,7 +75,3 @@ def gen_rand_emp():
 persist_employee_data(gen_rand_emp(), os.getcwd() + "\Employee.csv")
 employee_list = read_employee_data(os.getcwd() + "\Employee.csv")
 [print(x.toString()) for x in employee_list]
-fileobj=open(os.getcwd() + "\Employee.csv","wb+")
-if not fileobj.closed:
-    print("file is already opened,closing")
-    fileobj.close()
